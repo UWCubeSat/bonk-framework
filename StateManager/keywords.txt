@@ -1,0 +1,4 @@
+StateManager    KEYWORD1
+get_state   KEYWORD2
+set_state   KEYWORD2
+flush_to_sd KEYWORD2
