@@ -23,7 +23,8 @@ class StateManager
     // false otherwise.
     bool initialize(const S& fallback_state);
 
-    // returns the current state
+    // Puts state in out. Returns true if manager is initialized, false
+    // otherwise.
     bool get_state(S& out) const {
         if (!_initialized) {
             return false;
@@ -37,7 +38,8 @@ class StateManager
     // if false.
     bool set_state(const S& state);
 
-    // returns the number of successful writes to EEPROM
+    // Puts number of successful writes to EEPROM. Returns true
+    // if manager is initialized, false otherwise.
     bool get_write_count(uint16_t& out) const {
         if (!_initialized) {
             return false;
