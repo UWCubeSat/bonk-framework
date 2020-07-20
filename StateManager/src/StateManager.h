@@ -14,10 +14,9 @@ class StateManager
   public:
     // Constructs a StateManager. Uses file at filepath
     // to store overflow data. 
-    StateManager(const char *filepath) :
-                              _write_size(sizeof(S)),
-                              _offset(sizeof(uint32_t) + sizeof(uint16_t)),
-                              _state_file_path(filepath) { }
+    StateManager(const char *filepath) : _write_size(sizeof(S)),
+                                         _offset(sizeof(uint32_t) + sizeof(uint16_t)),
+                                         _state_file_path(filepath) { }
 
     // Initializes StateManager with some initial state. Falls back
     // on fallback_state if EEPROM data are bad. Returns true if successful
@@ -25,7 +24,13 @@ class StateManager
     bool initialize(const S& fallback_state);
 
     // returns the current state
-    S get_state() const { return _state; }
+    bool get_state(S& out) const {
+        if (!_initialized) {
+            return false;
+        }
+        out = _state;
+        return true;
+    }
 
     // sets the state and writes the update to the EEPROM. Returns true
     // if successful and false otherwise. Contents of state not guaranteed
@@ -33,7 +38,13 @@ class StateManager
     bool set_state(const S& state);
 
     // returns the number of successful writes to EEPROM
-    uint16_t get_write_count() const { return _write_count; }
+    bool get_write_count(uint16_t& out) const {
+        if (!_initialized) {
+            return false;
+        }
+        out = _write_count;
+        return true;
+    }
 
     // flushes contents of EEPROM to attached SD card. Returns
     // true if successul and false otherwise.
@@ -66,6 +77,9 @@ class StateManager
 
     // current state
     S _state;
+
+    // is the state manager initialized?
+    bool _initialized;
 };  // StateManager class
 
 template <typename S>
@@ -83,11 +97,12 @@ bool StateManager<S>::initialize(const S& fallback_state) {
     if (writes == 0 || writes >= (EEPROM.length() - _offset) / _write_size) {
         // number of writes is weird, fallback on fallback_state
         _write_count = 0;
-        return StateManager<S>::set_state(fallback_state);
+        _initialized = StateManager<S>::set_state(fallback_state);
     } else {
         // writes are reasonable, pull state and check crc
-        return StateManager<S>::read_state(_state);
+        _initialized = StateManager<S>::read_state(_state);
     }
+    return _initialized;
 }
 
 template <typename S>
@@ -109,6 +124,9 @@ bool StateManager<S>::write_state(const S& state) {
 
 template <typename S>
 bool StateManager<S>::set_state(const S &state) {
+    if (!_initialized) {
+        return false;
+    }
     if (StateManager::filled()) {
         if (!StateManager::flush_to_sd()) {
             return false;
@@ -124,6 +142,9 @@ bool StateManager<S>::set_state(const S &state) {
 
 template <typename S>
 bool StateManager<S>::flush_to_sd() {
+    if (!_initialized) {
+        return false;
+    }
     File sf = SD.open(_state_file_path, O_APPEND | O_WRITE);
     if (!sf) {
         return false;
