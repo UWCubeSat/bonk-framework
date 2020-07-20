@@ -1,78 +1,106 @@
 #ifndef STATE_MANAGER_H_
 #define STATE_MANAGER_H_
 
-#include <stdint.h>   // for uint64_t, uint32_t
+#include <stdint.h>     // for uint32_t, uint16_t, uint8_t
 
-#include <EEPROM.h>
-#include <SD.h>
+#include <EEPROM.h>     // for access to Arduino EEPROM
+#include <SD.h>         // for access to SD card attached to Arduino
 
+
+// Manages the state of an Arduino and attached devices.
 template <typename S>
 class StateManager
 {
   public:
-    StateManager(const S& default_state, const char *filepath);
+    // Constructs a StateManager. Uses file at filepath
+    // to store overflow data. 
+    StateManager(const char *filepath) :
+                              _write_size(sizeof(S)),
+                              _offset(sizeof(uint32_t) + sizeof(uint16_t)),
+                              _state_file_path(filepath) { }
+
+    // Initializes StateManager with some initial state. Falls back
+    // on fallback_state if EEPROM data are bad. Returns true if successful
+    // false otherwise.
+    bool initialize(const S& fallback_state);
+
+    // returns the current state
     S get_state() const { return _state; }
+
+    // sets the state and writes the update to the EEPROM. Returns true
+    // if successful and false otherwise. Contents of state not guaranteed
+    // if false.
     bool set_state(const S& state);
+
+    // returns the number of successful writes to EEPROM
     uint16_t get_write_count() const { return _write_count; }
+
+    // flushes contents of EEPROM to attached SD card. Returns
+    // true if successul and false otherwise.
     bool flush_to_sd();
 
   private:
-    uint32_t crc32(const S& state) const;
+    // computes a crc32 of some state
+    uint32_t crc32(S& state) const;
+
+    // checks if EEPROM can store any more states
     bool filled() const;
+
+    // appends a state to the EEPROM
     bool write_state(const S& state);
+
+    // reads the last state from the EEPROM
     bool read_state(S& state) const;
 
+    // number of written records
     uint16_t _write_count;
+
+    // size of state record in bytes
     const uint16_t _write_size;
+
+    // beginning of records in bytes
     const uint16_t _offset;
+
+    // path to state file on SD Card
     const char* _state_file_path;
-    const S _default_state;
+
+    // current state
     S _state;
 };  // StateManager class
 
 template <typename S>
-StateManager<S>::StateManager(const S& default_state, const char *filepath) :
-                              _write_size(sizeof(S)),
-                              _offset(sizeof(uint32_t) + sizeof(uint16_t)),
-                              _state_file_path(filepath),
-                              _default_state(default_state) {
+bool StateManager<S>::initialize(const S& fallback_state) {
+    // read crc and write count
+    uint32_t crc;
+    uint16_t writes;
+    uint32_t& ret_crc = EEPROM.get(0, crc);
+    uint16_t& ret_writes = EEPROM.get(sizeof(uint32_t), writes);
 
-    // uint32_t crc;
-    // EEPROM.get(0, crc);
-    // uint32_t real_crc = StateManager::crc();
-
-    // uint16_t magic_num;
-    // EEPROM.get(sizeof(uint32_t), magic_num);
-
-    // if (crc == real_crc && magic_num == MAGIC_NUMBER) {
-    //     // the data in the EEPROM is good
-    //     // load the last state we saved
-    //     EEPROM.get(_offset, _write_count);
-    //     StateManager<S>::read_state(_state);
-    // } else {
-    //     // the data in the EEPROM are bad
-    //     // fall back to the default state
-    //     StateManager<S>::set_state(_default_state);
-    //     EEPROM.put(sizeof(uint32_t), _magic_number);
-    //     EEPROM.put(0, StateManager::crc());
-    // }
+    if (writes == 0 || writes >= (EEPROM.length() - _offset) / _write_size) {
+        // number of writes is weird, fallback on fallback_state
+        _write_count = 0;
+        return StateManager<S>::set_state(fallback_state);
+    } else {
+        // writes are reasonable, pull state and check crc
+        return StateManager<S>::read_state(_state);
+    }
 }
 
 template <typename S>
 bool StateManager<S>::read_state(S& state) const {
-    S& ret_state = EEPROM.get(_offset + _write_size * (_write_count - 1), state);
+    EEPROM.get(_offset + _write_size * (_write_count - 1), state);
     uint32_t crc;
     uint32_t& ret_crc = EEPROM.get(0, crc);
-    return ret_crc == crc && StateManager::crc32(state) == crc && ret_state == state;
+    return ret_crc == crc && StateManager::crc32(state) == crc;
 }
 
 template <typename S>
 bool StateManager<S>::write_state(const S& state) {
-    uint32_t crc = StateManager::crc32(state);
-    const S& ret_state = EEPROM.put(_offset + _write_size * (_write_count++), state);
+    uint32_t crc = StateManager::crc32(const_cast<S&>(state));
+    EEPROM.put(_offset + _write_size * (_write_count++), state);
     const uint16_t& ret_writes = EEPROM.put(sizeof(uint32_t), _write_count);
     const uint32_t& ret_crc = EEPROM.put(0, crc);
-    return ret_state == state && ret_writes == _write_count && ret_crc == crc;
+    return ret_writes == _write_count && ret_crc == crc;
 }
 
 template <typename S>
@@ -93,8 +121,13 @@ bool StateManager<S>::set_state(const S &state) {
 template <typename S>
 bool StateManager<S>::flush_to_sd() {
     File sf = SD.open(_state_file_path, O_APPEND | O_WRITE);
+    if (!sf) {
+        return false;
+    }
     for (uint16_t i = sizeof(uint16_t); i < EEPROM.length(); i++) {
-        sf.write(EEPROM[i]);
+        if (sf.write(EEPROM[i]) == 0) {
+            return false;
+        }
     }
     sf.close();
 
@@ -105,7 +138,7 @@ bool StateManager<S>::flush_to_sd() {
 
 // code adapted from https://www.arduino.cc/en/Tutorial/EEPROMCrc
 template <typename S>
-uint32_t StateManager<S>::crc32(const S& state) const {
+uint32_t StateManager<S>::crc32(S& state) const {
     constexpr uint32_t crc_table[16] = {
         0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
         0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
@@ -116,7 +149,7 @@ uint32_t StateManager<S>::crc32(const S& state) const {
     uint32_t crc = ~0L;
 
     uint16_t size = sizeof(S);
-    uint8_t* data = &state;
+    uint8_t* data = reinterpret_cast<uint8_t*>(&state);
 
     for (uint16_t index = 0 ; index < size; ++index) {
         crc = crc_table[(crc ^ (*(data + index))) & 0x0f] ^ (crc >> 4);
