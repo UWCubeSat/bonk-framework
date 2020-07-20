@@ -1,4 +1,6 @@
-StateManager    KEYWORD1
-get_state   KEYWORD2
-set_state   KEYWORD2
-flush_to_sd KEYWORD2
+StateManager        KEYWORD1
+initialize          KEYWORD2
+get_state           KEYWORD2
+set_state           KEYWORD2
+get_write_count     KEYWORD2
+flush_to_sd         KEYWORD2
