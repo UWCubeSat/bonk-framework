@@ -99,6 +99,8 @@ bool StateManager<S>::initialize(const S& fallback_state) {
     if (writes == 0 || writes >= (EEPROM.length() - _offset) / _write_size) {
         // number of writes is weird, fallback on fallback_state
         _write_count = 0;
+	// temporarily set _initialized so that set_state doesn't choke
+	_initialized = true;
         _initialized = StateManager<S>::set_state(fallback_state);
     } else {
         // writes are reasonable, pull state and check crc
@@ -188,7 +190,7 @@ uint32_t StateManager<S>::crc32(S& state) const {
 
 template <typename S>
 bool StateManager<S>::filled() const {
-    return (_write_size * (_write_count + 1) + _offset) >= EEPROM.length();
+    return (_write_size * (_write_count + 1) + _offset) > EEPROM.length();
 }
 
 #endif  // STATE_MANAGER_H_
