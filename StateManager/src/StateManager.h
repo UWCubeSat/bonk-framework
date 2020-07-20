@@ -76,6 +76,10 @@ bool StateManager<S>::initialize(const S& fallback_state) {
     uint32_t& ret_crc = EEPROM.get(0, crc);
     uint16_t& ret_writes = EEPROM.get(sizeof(uint32_t), writes);
 
+    if (ret_crc != crc || ret_writes != writes) {
+        return false;
+    }
+
     if (writes == 0 || writes >= (EEPROM.length() - _offset) / _write_size) {
         // number of writes is weird, fallback on fallback_state
         _write_count = 0;
@@ -124,7 +128,7 @@ bool StateManager<S>::flush_to_sd() {
     if (!sf) {
         return false;
     }
-    for (uint16_t i = sizeof(uint16_t); i < EEPROM.length(); i++) {
+    for (uint16_t i = sizeof(uint32_t); i < _offset + _write_size * _write_count; i++) {
         if (sf.write(EEPROM[i]) == 0) {
             return false;
         }
