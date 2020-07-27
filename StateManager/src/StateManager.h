@@ -99,12 +99,20 @@ bool StateManager<S>::initialize(const S& fallback_state) {
     if (writes == 0 || writes >= (EEPROM.length() - _offset) / _write_size) {
         // number of writes is weird, fallback on fallback_state
         _write_count = 0;
-	// temporarily set _initialized so that set_state doesn't choke
-	_initialized = true;
+        // temporarily set _initialized so that set_state doesn't choke
+        _initialized = true;
         _initialized = StateManager<S>::set_state(fallback_state);
     } else {
         // writes are reasonable, pull state and check crc
+        _write_count = writes;
         _initialized = StateManager<S>::read_state(_state);
+        if (!_initialized) {
+            // fallback on default_state, CRC likely failed
+            // last write was bad, so overwrite it
+            _write_count--;
+            _initialized = true;
+            _initialized = StateManager<S>::set_state(fallback_state);
+        }
     }
     return _initialized;
 }
