@@ -1,4 +1,4 @@
-CPPFLAGS := ${CPPFLAGS} -Wall -Ivendor
+CPPFLAGS := ${CPPFLAGS} -Wall -Ivendor -g
 # TODO: Figure out how Make determines the C++ compiler for implicit rules.
 CPP := g++
 
