@@ -13,7 +13,6 @@ namespace BONK {
       const char* log_path;
 
   };  // class LogManager
-  extern LogManager Logger;
 }   // BONK namespace
 
 #endif  // LOG_MANAGER_H_
