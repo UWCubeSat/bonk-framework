@@ -1,3 +1,5 @@
+// Copyright Eli Reed, 2020 released under GPLv3
+
 #ifndef STATE_MANAGER_H_
 #define STATE_MANAGER_H_
 
