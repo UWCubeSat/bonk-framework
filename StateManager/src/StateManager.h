@@ -205,7 +205,7 @@ uint32_t StateManager<S>::crc32(S& state) const {
 }
 
 template <typename S>
-    bool StateManager<S>::filled() const {
+bool StateManager<S>::filled() const {
     return (write_size_ * (write_count_ + 1) + offset_) > EEPROM.length();
 }
 
