@@ -1,1 +1,6 @@
-// Copyright Eli Reed, 2020 released under GPLv3
+#include "EventManager.h"
+
+#include <stdlib.h>
+
+namespace BONK {
+}
