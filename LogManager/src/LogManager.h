@@ -3,26 +3,31 @@
 #ifndef LOG_MANAGER_H_
 #define LOG_MANAGER_H_
 
-#include "DataLogger.h"
-#include "Logger.h"
+#include <SdFat.h>
 
 namespace BONK {
 
-enum LOG_TYPE {
+typedef enum LOG_TYPE {
     DEBUG,
     WARNING,
     ERROR,
     NOTIFY,
-    DATA
-};
+    DATA,
+    DATA_DEBUG,
+} LogType;
 
 class LogManager {
   public:
-    LogManager();
-    bool log(BONK::LOG_TYPE log_type, const char* message)
+    LogManager() : last_write_successful_(false) { }
+
+    bool begin(const char* log_path, const char* data_path);
+
   private:
-    DataLogger dl_;
-    Logger logger_;
+    const char* data_path_;
+    SdFile data_file_;
+
+    const char* log_path_;
+    SdFile log_file_;
 };  // class LogManager
 
 }   // BONK namespace
