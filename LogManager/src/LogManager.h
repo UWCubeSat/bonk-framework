@@ -3,16 +3,26 @@
 #ifndef LOG_MANAGER_H_
 #define LOG_MANAGER_H_
 
-#include <SD.h>         // for access to SD card attached to Arduino
+#include "DataLogger.h"
+#include "Logger.h"
 
 namespace BONK {
 
-enum LOG_LEVEL{DEBUG, WARNING, ERROR, NOTIFY};
+enum LOG_TYPE {
+    DEBUG,
+    WARNING,
+    ERROR,
+    NOTIFY,
+    DATA
+};
+
 class LogManager {
   public:
-    LogManager(const char* log_path);
+    LogManager();
+    bool log(BONK::LOG_TYPE log_type, const char* message)
   private:
-    const char* log_path_;
+    DataLogger dl_;
+    Logger logger_;
 };  // class LogManager
 
 }   // BONK namespace
