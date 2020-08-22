@@ -6,26 +6,23 @@
 #include <stdint.h>     // for uint32_t, uint16_t, uint8_t
 
 #include <EEPROM.h>     // for access to Arduino EEPROM
-#include <SD.h>         // for access to SD card attached to Arduino
-
+#include <SdFat.h>      // for access to SD card attached to Arduino
 
 namespace BONK {
 
 // Manages the state of an Arduino and attached devices.
 template <typename S>
-class StateManager
-{
+class StateManager {
   public:
-    // Constructs a StateManager. Uses file at filepath
-    // to store overflow data. 
-    StateManager(const char *filepath) : write_size_(sizeof(S)),
-                                        offset_(sizeof(uint32_t) + sizeof(uint16_t)),
-                                        state_file_path_(filepath) { }
+    // Constructs a StateManager configured for type S.
+    StateManager() : write_size_(sizeof(S)),
+                     offset_(sizeof(uint32_t) + sizeof(uint16_t)) { }
 
     // Initializes StateManager with some initial state. Falls back
-    // on fallback_state if EEPROM data are bad. Returns true if successful
+    // on fallback_state if EEPROM data are bad. Uses file at filepath
+    // to store overflow data. Returns true if successful
     // false otherwise.
-    bool initialize(const S& fallback_state);
+    bool initialize(const char *filepath, const S& fallback_state);
 
     // Puts state in out. Returns true if manager is initialized, false
     // otherwise.
@@ -77,7 +74,13 @@ class StateManager
 };  // StateManager class
 
 template <typename S>
-bool StateManager<S>::initialize(const S& fallback_state) {
+bool StateManager<S>::initialize(const char* filepath, const S& fallback_state) {
+    if (filepath == nullptr) {
+        return false;
+    }
+    
+    state_file_path_ = filepath;
+
     // read crc and write count
     uint32_t crc;
     uint16_t writes;
@@ -162,11 +165,13 @@ bool StateManager<S>::get_write_count(uint16_t& out) const {
 
 template <typename S>
 bool StateManager<S>::flush_to_sd() {
+    // TODO: need some notion of SD file system - library global? or ref stored in class
     if (!initialized_) {
         return false;
     }
-    File sf = SD.open(state_file_path_, O_APPEND | O_WRITE);
-    if (!sf) {
+
+    SdFile sf;
+    if (!sf.open(state_file_path_, O_APPEND | O_WRITE)) {
         return false;
     }
     for (uint16_t i = sizeof(uint32_t); i < offset_ + write_size_ * write_count_; i++) {
