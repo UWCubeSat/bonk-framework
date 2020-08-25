@@ -12,19 +12,20 @@ typedef enum LOG_TYPE {
     WARNING,
     ERROR,
     NOTIFY,
-    DATA,
-    DATA_DEBUG,
 } LogType;
 
 class LogManager {
   public:
-    LogManager() : last_write_successful_(false) { }
+    LogManager() { }
 
     bool begin(const char* log_path, const char* data_path);
 
+    size_t log(BONK::LogType level, const String& msg);
+    size_t log(BONK::LogType level, const char[]);
+    size_t log(BONK::LogType level, const uint8_t* buf, size_t size);
+    size_t log(BONK::LogType level, const char* msg);
   private:
-    const char* data_path_;
-    SdFile data_file_;
+    size_t print_tag(BONK::LogType level);
 
     const char* log_path_;
     SdFile log_file_;

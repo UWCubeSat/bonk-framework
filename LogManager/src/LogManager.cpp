@@ -1,49 +1,67 @@
 // Copyright Eli Reed, 2020 released under GPLv3
 
+#include <string.h>
+
 #include "LogManager.h"
 
 bool BONK::LogManager::begin(const char* log_path, const char* data_path) {
-    if (log_path == nullptr || data_path == nullptr) {
+    if (log_path == nullptr) {
         return false;
     }
     log_path_ = log_path;
-    data_path_ = data_path;
-    if (!data_file_.open(data_path_, O_WRITE | O_APPEND) ||
-        !log_file_.open(log_path_, O_WRITE | O_APPEND))
-        return false;
-    }
-    return true;
+    return log_file_.open(log_path_, O_WRITE | O_APPEND);
 }
 
-size_t BONK::LogManager::log(BONK::LogType log_type, const String& msg) {
-    return BONK::LogManager::log(log_type, msg.c_str(), msg.length());
+// structure of following functions shamelessly stolen from Print.cpp
+
+size_t BONK::LogManager::log(BONK::LogType level, const String& msg) {
+    return BONK::LogManager::log(level, msg.c_str());
 }
 
-size_t BONK::LogManager::log(BONK::LogType log_type, const char* msg) {
+size_t BONK::LogManager::log(BONK::LogType level, const char[] msg) {
+    size_t bytes = BONK::LogManager::print_tag(level);
+    bytes += log_file_.write(msg);
+    bytes += log_file_.println();
+    return bytes;
+}
+
+size_t BONK::LogManager::log(BONK::LogType level, const char* msg) {
     if (msg == nullptr) return 0;
-    return BONK::LogManager::log(log_type, (const uint8_t *)msg, strlen(msg));
+    return BONK::LogManager::log(level, (const uint8_t* buf)msg, strlen(msg)); 
 }
 
-size_t BONK::LogManager::log(BONK::LogType log_type, const char msg[]) {
-    return BONK::LogManager::log(log_type, msg);
-}
-
-size_t BONK::LogManager::log(BONK::LogType log_type, uint8_t byte) {
-    SdFile* target_file = nullptr;
-    String tag;
-    switch(log_type) {
+size_t BONK::LogManager::log(BONK::LogType level, const uint8_t* buf, size_t size) {
+    size_t bytes = print_tag(level);
+    switch level {
         case BONK::LogType.DEBUG:
-            break;
-        case BONK::LogType.DATA_DEBUG:
-            break;
-        case BONK::LogType.DATA:
+            bytes += Serial.write(buf, size);
+            bytes += Serial.println();
             break;
         case BONK::LogType.WARNING:
-            break;
         case BONK::LogType.ERROR:
-            break;
         case BONK::LogType.NOTIFY:
-        case default:
+            bytes += log_file_.write(buf, size);
+            bytes += log_file_.println();
             break;
     }
+    return bytes;
+}
+
+size_t BONK::LogManager::print_tag(BONK::LogType level) {
+    std::string msg;
+    switch level {
+        case BONK::LogType.DEBUG:
+            return 0;
+        case BONK::LogType.WARNING:
+            msg = "[WARN] ";
+            break;
+        case BONK::LogType.ERROR:
+            msg = "[ERR] "
+            break;
+        case BONK::LogType.NOTIFY:
+            msg = "[NOTIFY] ";
+            break;
+    }
+    msg += millis() + ": ";
+    return log_file_.print(msg.c_str());
 }
