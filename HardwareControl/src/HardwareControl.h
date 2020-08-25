@@ -1,134 +1,195 @@
 #ifndef BONK_HARDWARE_CONTROL_H_
 #define BONK_HARDWARE_CONTROL_H_
 
-#ifndef BONK_9557_ADDRESS
-#define BONK_9557_ADDRESS 0b1111111;
-#endif
-#ifndef BONK_MAIN226_ADDRESS
+#include <Wire.h>
+#include <INA226.h>
+
+#define BONK_CONTAINMENT9557_ADDRESS 0b1111111;
 #define BONK_MAIN226_ADDRESS 0b1000000
-#endif
-#ifndef BONK_BOOST226_ADDRESS
 #define BONK_BOOST226_ADDRESS 0b1000101
-#endif
-#ifndef BONK_MAIN226_SHUNT_R
-#define BONK_MAIN226_SHUNT_R 0.05f
-#endif
-#ifndef BONK_BOOST226_SHUNT_R
-#define BONK_BOOST226_SHUNT_R 0.05f
-#endif
 #ifndef BONK_BOOST_ENABLE_PIN
 #define BONK_BOOST_ENABLE_PIN 2
 #endif
 
-namespace BONK {
+namespace Bonk {
 
-  typedef enum HardwareControlError {
-				     BONK_HC_OK,
-				     BONK_HC_9557_NOT_PRESENT,
-				     BONK_HC_MAIN226_NOT_PRESENT,
-				     BONK_HC_BOOST226_NOT_PRESENT,
-  } HardwareControlError;
+	class Main226: private INA226 {
+	public:
+		void begin(float shunt_resistor) {
+			INA226::begin();
+			INA226::configure(
+				INA226_AVERAGES_4,
+				INA226_BUS_CONV_TIME_140US,
+				INA226_SHUNT_CONV_TIME_140US,
+				INA226_MODE_SHUNT_BUS_CONT);
+			// it's unlikely we'll need precise current readings, so I'd rather go high
+			// with the maximum current to make it easier to debug overcurrents
+			INA226::calibrate(shunt_resistor, 2);
+		}
+		void begin() {
+			begin(0.05f);
+		}
+	};
 
-  class HardwareControl {
-  public:
-    HardwareControl(): main226(INA226()),
-#ifdef BONK_BOOST
-		       boost226(INA226())
-#endif
-    { }
-    HardwareControlError begin(const float currentLimit);
-    void containmentPinMode(const uint8_t pin, const boolean) const;
-    void containmentDigitalWrite(const uint8_t pin, const boolean) const;
-    boolean containmentDigitalRead(const uint8_t pin) const;
-    float readMainCurrent() const { return main226.readShuntCurrent(); } // in milliamps
-    float readMainVoltage() const { return main226.readBusVoltage(); } // in millivolts
-    float readMainPower() const { return main226.readBusPower(); } // in milliwatts
+	class Boost226: private INA226 {
+	public:
+		void begin(float shunt_resistor) {
+			INA226::begin(BONK_BOOST226_ADDRESS);
+			INA226::configure(
+				INA226_AVERAGES_4,
+				INA226_BUS_CONV_TIME_140US,
+				INA226_SHUNT_CONV_TIME_140US,
+				INA226_MODE_SHUNT_BUS_CONT);
+			// boost should have substantially lower current
+			INA226::calibrate(shunt_resistor, 1);
+		}
+		void begin() {
+			begin(0.05f);
+		}
+	};
 
-#ifdef BONK_BOOST
-    void enableBoostConverter(const boolean) const;
-    float readBoostCurrent() const { return boost226.readShuntCurrent(); }
-    float readBoostVoltage() const { return boost226.readBusVoltage(); }
-    float readBoostPower() const { return boost226.readBusPower(); }
-#endif
-//    INA226 get_main226() const { return main226; }
-//    INA226 get_boost226() const { return boost226; }
-  private:
-    Bonk_9557 containment9557;
-    INA226 main226;
-#ifdef BONK_BOOST
-    INA226 boost226;
-#endif
-  }
-
-    class Bonk_9557 {
-    public:
-      Bonk_9557(uint8_t addr) {
-			       registerCache[0] = 0;
-			       // this will be reset after begin(), though.
-			       registerCache[1] = 0b11110000;
-			       registerCache[2] = 0xFF;
-			       address = addr;
-      }
-
-      void begin() {
-	writeRegister(REG_9557_INVERT, 0);
-      }
-
-      uint8_t pinMode(const uint8_t pin, const boolean isOutput) {
-	uint8_t oldConfig = readRegister(REG_9557_CONFIG);
-	uint8_t newConfig = isOutput ?
-	  oldConfig & ~(1<<pin) :
-	  oldConfig | (1<<pin);
-	writeRegister(REG_9557_CONFIG, newConfig);
-	return BONK_HC_OK;
-      }
-
-      uint8_t digitalWrite(const uint8_t pin, const boolean isHigh) {
-	uint8_t oldOut = readRegister(REG_9557_OUTPUT);
-	uint8_t newOut = isHigh ?
-	  oldOut | (1 << pin) :
-	  oldOut & ~(1 << pin);
-	writeRegister(REG_9557_OUTPUT, newOut);
-	return BONK_HC_OK;
-      }
-
-      // TODO: returning the error?
-      uint8_t digitalRead(const uint8_t pin) {
-	return (readPins() >> pin) & 1;
-      }
-    private:
-      uint8_t address;
-      // we do not cache the input register, so the first element is the output register.
-      uint8_t registerCache[3];
-      uint8_t writeRegister(uint8_t reg, uint8_t data) {
-	// TODO: allow alternate wire, in case somebody insane wants to use the main i2c interface for
-	// something else (eg, a camera), though they should *really* be trying to use the extra USART as
-	// an I2C in that case.
-	if (reg > REG_9557_IN && registerCache[reg] == data) {
-	  return BONK_HC_OK;
+	void enableBoostConverter(bool enable) {
+		digitalWrite(BONK_BOOST_ENABLE_PIN, enable);
 	}
-	Wire.beginTransmission(address);
-	Wire.write(reg);
-	Wire.write(data);
-	uint8_t error = Wire.endTransmission();
-	if (error == 0) {
-	  registerCache[reg] = data;
-	}
-	return error;
-      }
-      uint8_t readPins() {
-	Wire.beginTransmission(address);
-	Wire.write(REG_9557_IN);
-	Wire.endTransmission();
-	Wire.requestFrom(address, 1);
-	return Wire.read();
-      }
-      // for reg > 0
-      uint8_t readRegister(const uint8_t reg) const {
-	return registerCache[reg];
-      }
-    }
 
+	enum pca9557_register {
+		PCA9557_INPUT,
+		PCA9557_OUTPUT,
+		PCA9557_INVERT,
+		PCA9557_CONFIG,
+	};
+
+	class Pca9557 {
+	public:
+		Pca9557(uint8_t addr) {
+			registerCache[0] = 0;
+			// this will be reset after begin(), though.
+			registerCache[1] = 0b11110000;
+			registerCache[2] = 0xFF;
+			address = addr;
+		}
+
+		void begin() {
+			writeRegister(PCA9557_INVERT, 0);
+		}
+
+		void pinMode(const uint8_t pin, const boolean isOutput) {
+			uint8_t oldConfig = readRegister(PCA9557_CONFIG);
+			uint8_t newConfig = isOutput ?
+				oldConfig & ~(1<<pin) :
+				oldConfig | (1<<pin);
+			writeRegister(PCA9557_CONFIG, newConfig);
+		}
+
+		void digitalWrite(const uint8_t pin, const boolean isHigh) {
+			uint8_t oldOut = readRegister(PCA9557_OUTPUT);
+			uint8_t newOut = isHigh ?
+				oldOut | (1 << pin) :
+				oldOut & ~(1 << pin);
+			writeRegister(PCA9557_OUTPUT, newOut);
+		}
+
+		uint8_t digitalRead(const uint8_t pin) const {
+			return (readPins() >> pin) & 1;
+		}
+	private:
+		uint8_t address;
+		// we do not cache the input register, so the first element is the output register.
+		uint8_t registerCache[3];
+		void writeRegister(uint8_t reg, uint8_t data) {
+			// TODO: allow alternate wire, in case somebody insane wants to use the main i2c interface for
+			// something else (eg, a camera), though they should *really* be trying to use the extra USART as
+			// an I2C in that case.
+			if (reg > REG_9557_IN && registerCache[reg] == data) {
+				// violating cse 143 guidelines: check!
+				return;
+			}
+			Wire.beginTransmission(address);
+			Wire.write(reg);
+			Wire.write(data);
+			// TODO: errors, here and on all other endTransmissions
+			Wire.endTransmission();
+			registerCache[reg] = data;
+		}
+		uint8_t readPins() const {
+			Wire.beginTransmission(address);
+			Wire.write(PCA9557_INPUT);
+			Wire.endTransmission();
+			Wire.requestFrom(address, 1);
+			return Wire.read();
+		}
+		// for reg > 0
+		uint8_t readRegister(const uint8_t reg) const {
+			return registerCache[reg];
+		}
+	};
+
+	enum tmp411_resolution {
+		TMP411_RESOLUTION_9BIT,
+		TMP411_RESOLUTION_10BIT,
+		TMP411_RESOLUTION_11BIT,
+		TMP411_RESOLUTION_12BIT,
+	};
+
+	enum tmp411_conversion_rate {
+		TMP411_RATE_16S, // read: 16 seconds from the beginning of one conversion to the
+                    		 // beginning of the next conversion.
+		TMP411_RATE_8S,
+		TMP411_RATE_4S,
+		TMP411_RATE_2S,
+		TMP411_RATE_1S,
+		TMP411_RATE_S5, // .5 seconds
+		TMP411_RATE_S25,
+		TMP411_RATE_S125, // still uses less than half a milliamp.
+	};
+
+	// not really sure why to make it an enum when every value is specified manually; oh well
+	enum tmp411_register {
+		TMP411_LOCAL_TEMP_H  = 0x00,
+		TMP411_LOCAL_TEMP_L  = 0x15,
+		TMP411_REMOTE_TEMP_H = 0x01,
+		TMP411_REMOTE_TEMP_L = 0x10,
+		TMP411_STATUS        = 0x02,
+		// for writing only:
+		TMP411_CONFIG_W      = 0x09, 
+		TMP411_CONV_RATE_W   = 0x0A,
+		TMP411_RESOLUTION_W  = 0x1A,
+	};
+  
+	class Tmp411 {
+	public:
+		Tmp411(uint8_t addr): _addr(addr) { }
+		void begin(bool extendedRange, uint8_t resolution, uint8_t conversionRate) {
+			writeRegister(TMP411_CONFIG_W, (1 << 7) | (extendedRange * (1 << 2)));
+			writeRegister(TMP411_CONV_RATE_W, conversionRate);
+			writeRegister(TMP411_RESOLUTION_W, resolution);
+		}
+		// shift right by 8 bits to get the temperature in celsius.
+		uint16_t readLocalTemperature() {
+			return readRegister16(TMP411_LOCAL_TEMP_H, TMP411_LOCAL_TEMP_L);
+		}
+		uint16_t readRemoteTemperature() {
+			return readRegister16(TMP411_REMOTE_TEMP_H, TMP411_REMOTE_TEMP_L);
+		}
+	private:
+		uint8_t _addr;
+		void writeRegister(uint8_t reg, uint8_t val) {
+			Wire.beginTransmission(_addr);
+			Wire.write(reg);
+			Wire.write(val);
+			Wire.endTransmission();
+		}
+		uint8_t readRegister(uint8_t reg) {
+			Wire.beginTransmission(_addr);
+			Wire.write(reg);
+			Wire.endTransmission();
+			Wire.requestFrom(_addr, 1);
+			return Wire.read();
+		}
+		uint16_t readRegister16(uint8_t regH, uint8_t regL) {
+			return (readRegister(regH) << 8) + readRegister(regL);
+		}
+	};
 }
 
 #endif // HARDWARE_CONTROL_H_
