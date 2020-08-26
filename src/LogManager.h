@@ -7,12 +7,12 @@
 
 namespace BONK {
 
-typedef enum LOG_TYPE {
+enum class LogType {
     DEBUG,
     WARNING,
     ERROR,
     NOTIFY,
-} LogType;
+};
 
 class LogManager {
   public:
@@ -21,7 +21,6 @@ class LogManager {
     bool begin(const char* log_path, const char* data_path);
 
     size_t log(BONK::LogType level, const String& msg);
-    size_t log(BONK::LogType level, const char[]);
     size_t log(BONK::LogType level, const uint8_t* buf, size_t size);
     size_t log(BONK::LogType level, const char* msg);
   private:

@@ -1,10 +1,10 @@
-#ifndef BONK_HARDWARE_CONTROL_H_
-#define BONK_HARDWARE_CONTROL_H_
+#ifndef BONK_HARDWARE_CONTROL_H
+#define BONK_HARDWARE_CONTROL_H
 
 #include <Wire.h>
 #include <INA226.h>
 
-#define BONK_CONTAINMENT9557_ADDRESS 0b1111111;
+#define BONK_CONTAINMENT9557_ADDRESS 0b0011000
 #define BONK_MAIN226_ADDRESS 0b1000000
 #define BONK_BOOST226_ADDRESS 0b1000101
 #ifndef BONK_BOOST_ENABLE_PIN
@@ -13,9 +13,9 @@
 
 namespace Bonk {
 
-	class Main226: private INA226 {
+	class Main226: public INA226 {
 	public:
-		void begin(float shunt_resistor) {
+		void begin(float shuntResistor, float currentLimit) {
 			INA226::begin();
 			INA226::configure(
 				INA226_AVERAGES_4,
@@ -24,14 +24,16 @@ namespace Bonk {
 				INA226_MODE_SHUNT_BUS_CONT);
 			// it's unlikely we'll need precise current readings, so I'd rather go high
 			// with the maximum current to make it easier to debug overcurrents
-			INA226::calibrate(shunt_resistor, 2);
+			INA226::calibrate(shuntResistor, 2.0f);
+			INA226::setShuntVoltageLimit(currentLimit * shuntResistor);
+			INA226::enableShuntOverLimitAlert();
 		}
 		void begin() {
-			begin(0.05f);
+			Main226::begin(0.05f, 0.9f);
 		}
 	};
 
-	class Boost226: private INA226 {
+	class Boost226: public INA226 {
 	public:
 		void begin(float shunt_resistor) {
 			INA226::begin(BONK_BOOST226_ADDRESS);
@@ -50,6 +52,7 @@ namespace Bonk {
 
 	void enableBoostConverter(bool enable) {
 		digitalWrite(BONK_BOOST_ENABLE_PIN, enable);
+		pinMode(BONK_BOOST_ENABLE_PIN, OUTPUT);
 	}
 
 	enum pca9557_register {
@@ -66,7 +69,7 @@ namespace Bonk {
 			// this will be reset after begin(), though.
 			registerCache[1] = 0b11110000;
 			registerCache[2] = 0xFF;
-			address = addr;
+			_addr = addr;
 		}
 
 		void begin() {
@@ -93,34 +96,34 @@ namespace Bonk {
 			return (readPins() >> pin) & 1;
 		}
 	private:
-		uint8_t address;
+		uint8_t _addr;
 		// we do not cache the input register, so the first element is the output register.
 		uint8_t registerCache[3];
 		void writeRegister(uint8_t reg, uint8_t data) {
 			// TODO: allow alternate wire, in case somebody insane wants to use the main i2c interface for
 			// something else (eg, a camera), though they should *really* be trying to use the extra USART as
 			// an I2C in that case.
-			if (reg > REG_9557_IN && registerCache[reg] == data) {
+			if (reg > PCA9557_INPUT && registerCache[reg - 1] == data) {
 				// violating cse 143 guidelines: check!
 				return;
 			}
-			Wire.beginTransmission(address);
+			Wire.beginTransmission(_addr);
 			Wire.write(reg);
 			Wire.write(data);
 			// TODO: errors, here and on all other endTransmissions
 			Wire.endTransmission();
-			registerCache[reg] = data;
+			registerCache[reg - 1] = data;
 		}
 		uint8_t readPins() const {
-			Wire.beginTransmission(address);
+			Wire.beginTransmission(_addr);
 			Wire.write(PCA9557_INPUT);
 			Wire.endTransmission();
-			Wire.requestFrom(address, 1);
+			Wire.requestFrom(_addr, 1);
 			return Wire.read();
 		}
 		// for reg > 0
 		uint8_t readRegister(const uint8_t reg) const {
-			return registerCache[reg];
+			return registerCache[reg - 1];
 		}
 	};
 
@@ -145,10 +148,8 @@ namespace Bonk {
 
 	// not really sure why to make it an enum when every value is specified manually; oh well
 	enum tmp411_register {
-		TMP411_LOCAL_TEMP_H  = 0x00,
-		TMP411_LOCAL_TEMP_L  = 0x15,
-		TMP411_REMOTE_TEMP_H = 0x01,
-		TMP411_REMOTE_TEMP_L = 0x10,
+		TMP411_LOCAL_TEMP    = 0x00,
+		TMP411_REMOTE_TEMP   = 0x01,
 		TMP411_STATUS        = 0x02,
 		// for writing only:
 		TMP411_CONFIG_W      = 0x09, 
@@ -164,12 +165,15 @@ namespace Bonk {
 			writeRegister(TMP411_CONV_RATE_W, conversionRate);
 			writeRegister(TMP411_RESOLUTION_W, resolution);
 		}
+		void begin() {
+			Tmp411::begin(false, TMP411_RESOLUTION_12BIT, TMP411_RATE_S125);
+		}
 		// shift right by 8 bits to get the temperature in celsius.
 		uint16_t readLocalTemperature() {
-			return readRegister16(TMP411_LOCAL_TEMP_H, TMP411_LOCAL_TEMP_L);
+			return readRegister16(TMP411_LOCAL_TEMP);
 		}
 		uint16_t readRemoteTemperature() {
-			return readRegister16(TMP411_REMOTE_TEMP_H, TMP411_REMOTE_TEMP_L);
+			return readRegister16(TMP411_REMOTE_TEMP);
 		}
 	private:
 		uint8_t _addr;
@@ -186,8 +190,12 @@ namespace Bonk {
 			Wire.requestFrom(_addr, 1);
 			return Wire.read();
 		}
-		uint16_t readRegister16(uint8_t regH, uint8_t regL) {
-			return (readRegister(regH) << 8) + readRegister(regL);
+		uint16_t readRegister16(uint8_t reg) {
+			Wire.beginTransmission(_addr);
+			Wire.write(reg);
+			Wire.endTransmission();
+			Wire.requestFrom(_addr, 2);
+			return (Wire.read() << 8) + Wire.read();
 		}
 	};
 }

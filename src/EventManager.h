@@ -8,11 +8,11 @@
 #define BONK_USB_SERIAL Serial0
 #endif
 
-namespace BONK {
+namespace Bonk {
 
   typedef enum FlightEvent {
 #define BONK_FLIGHT_EVENT(blah, flightEvent) flightEvent,
-#include "FlightEvents.hpp"
+#include "FlightEvents.h"
 #undef BONK_FLIGHT_EVENT
   } FlightEvent;
 
@@ -61,7 +61,7 @@ namespace BONK {
 
     // default event handlers -- all noop
 #define BONK_FLIGHT_EVENT(blah, flightEvent) void on##flightEvent() const { }
-#include "FlightEvents.hpp"
+#include "FlightEvents.h"
 #undef BONK_FLIGHT_EVENT
   private:
     ShipReading _lastReading;
@@ -70,7 +70,7 @@ namespace BONK {
     char _buffer[16];
     unsigned char _buffer_n;
     bool _readingNormally;
-  }  // class EventManager
+  };  // class EventManager
 }
 
 #endif  // LOG_MANAGER_H_
