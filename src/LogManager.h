@@ -5,7 +5,7 @@
 
 #include <SdFat.h>
 
-namespace BONK {
+namespace Bonk {
 
 enum class LogType {
     DEBUG,
@@ -20,9 +20,9 @@ class LogManager {
 
     bool begin(const char* log_path, const char* data_path);
 
-    size_t log(BONK::LogType level, const String& msg);
-    size_t log(BONK::LogType level, const uint8_t* buf, size_t size);
-    size_t log(BONK::LogType level, const char* msg);
+    size_t log(LogType level, const String& msg);
+    size_t log(LogType level, const uint8_t* buf, size_t size);
+    size_t log(LogType level, const char* msg);
   private:
     size_t print_tag(BONK::LogType level);
 
