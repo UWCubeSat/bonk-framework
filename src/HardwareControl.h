@@ -55,11 +55,11 @@ namespace Bonk {
 		pinMode(BONK_BOOST_ENABLE_PIN, OUTPUT);
 	}
 
-	enum pca9557_register {
-		PCA9557_INPUT,
-		PCA9557_OUTPUT,
-		PCA9557_INVERT,
-		PCA9557_CONFIG,
+	enum class Pca9557Register {
+		INPUT,
+		OUTPUT,
+		INVERT,
+		CONFIG,
 	};
 
 	class Pca9557 {
@@ -73,23 +73,23 @@ namespace Bonk {
 		}
 
 		void begin() {
-			writeRegister(PCA9557_INVERT, 0);
+			writeRegister(Pca9557Register::INVERT, 0);
 		}
 
 		void pinMode(const uint8_t pin, const boolean isOutput) {
-			uint8_t oldConfig = readRegister(PCA9557_CONFIG);
+			uint8_t oldConfig = readRegister(Pca9557Register::CONFIG);
 			uint8_t newConfig = isOutput ?
 				oldConfig & ~(1<<pin) :
 				oldConfig | (1<<pin);
-			writeRegister(PCA9557_CONFIG, newConfig);
+			writeRegister(Pca9557Register::CONFIG, newConfig);
 		}
 
 		void digitalWrite(const uint8_t pin, const boolean isHigh) {
-			uint8_t oldOut = readRegister(PCA9557_OUTPUT);
+			uint8_t oldOut = readRegister(Pca9557Register::OUTPUT);
 			uint8_t newOut = isHigh ?
 				oldOut | (1 << pin) :
 				oldOut & ~(1 << pin);
-			writeRegister(PCA9557_OUTPUT, newOut);
+			writeRegister(Pca9557Register::OUTPUT, newOut);
 		}
 
 		uint8_t digitalRead(const uint8_t pin) const {
@@ -99,16 +99,16 @@ namespace Bonk {
 		uint8_t _addr;
 		// we do not cache the input register, so the first element is the output register.
 		uint8_t registerCache[3];
-		void writeRegister(uint8_t reg, uint8_t data) {
+		void writeRegister(const Pca9557Register reg, const uint8_t data) {
 			// TODO: allow alternate wire, in case somebody insane wants to use the main i2c interface for
 			// something else (eg, a camera), though they should *really* be trying to use the extra USART as
 			// an I2C in that case.
-			if (reg > PCA9557_INPUT && registerCache[reg - 1] == data) {
+			if (reg > Pca9557Register::INPUT && registerCache[(uint8_t)reg - 1] == data) {
 				// violating cse 143 guidelines: check!
 				return;
 			}
 			Wire.beginTransmission(_addr);
-			Wire.write(reg);
+			Wire.write((uint8_t)reg);
 			Wire.write(data);
 			// TODO: errors, here and on all other endTransmissions
 			Wire.endTransmission();
@@ -116,83 +116,87 @@ namespace Bonk {
 		}
 		uint8_t readPins() const {
 			Wire.beginTransmission(_addr);
-			Wire.write(PCA9557_INPUT);
+			Wire.write((uint8_t)Pca9557Register::INPUT);
 			Wire.endTransmission();
 			Wire.requestFrom(_addr, 1);
 			return Wire.read();
 		}
 		// for reg > 0
-		uint8_t readRegister(const uint8_t reg) const {
-			return registerCache[reg - 1];
+		uint8_t readRegister(const Pca9557Register reg) const {
+			return registerCache[(uint8_t)reg - 1];
 		}
 	};
 
-	enum tmp411_resolution {
-		TMP411_RESOLUTION_9BIT,
-		TMP411_RESOLUTION_10BIT,
-		TMP411_RESOLUTION_11BIT,
-		TMP411_RESOLUTION_12BIT,
+	enum class Tmp411Resolution {
+		RESOLUTION_9BIT,
+		RESOLUTION_10BIT,
+		RESOLUTION_11BIT,
+		RESOLUTION_12BIT,
 	};
 
-	enum tmp411_conversion_rate {
-		TMP411_RATE_16S, // read: 16 seconds from the beginning of one conversion to the
-                    		 // beginning of the next conversion.
-		TMP411_RATE_8S,
-		TMP411_RATE_4S,
-		TMP411_RATE_2S,
-		TMP411_RATE_1S,
-		TMP411_RATE_S5, // .5 seconds
-		TMP411_RATE_S25,
-		TMP411_RATE_S125, // still uses less than half a milliamp.
+	enum class Tmp411ConversionRate {
+		RATE_16S, // read: 16 seconds from the beginning of one conversion to the
+		          // beginning of the next conversion.
+		RATE_8S,
+		RATE_4S,
+		RATE_2S,
+		RATE_1S,
+		RATE_S5,  // .5 seconds
+		RATE_S25,
+		RATE_S125, // 8 convs/sec, still uses less than half a milliamp.
 	};
 
 	// not really sure why to make it an enum when every value is specified manually; oh well
-	enum tmp411_register {
-		TMP411_LOCAL_TEMP    = 0x00,
-		TMP411_REMOTE_TEMP   = 0x01,
-		TMP411_STATUS        = 0x02,
+	enum class Tmp411Register {
+		LOCAL_TEMP    = 0x00,
+		REMOTE_TEMP   = 0x01,
+		STATUS        = 0x02,
 		// for writing only:
-		TMP411_CONFIG_W      = 0x09, 
-		TMP411_CONV_RATE_W   = 0x0A,
-		TMP411_RESOLUTION_W  = 0x1A,
+		CONFIG_W      = 0x09,
+		CONV_RATE_W   = 0x0A,
+		RESOLUTION_W  = 0x1A,
 	};
   
 	class Tmp411 {
 	public:
 		Tmp411(uint8_t addr): _addr(addr) { }
-		void begin(bool extendedRange, uint8_t resolution, uint8_t conversionRate) {
-			writeRegister(TMP411_CONFIG_W, (1 << 7) | (extendedRange * (1 << 2)));
-			writeRegister(TMP411_CONV_RATE_W, conversionRate);
-			writeRegister(TMP411_RESOLUTION_W, resolution);
+		void begin(bool extendedRange,
+			   Tmp411Resolution resolution,
+			   Tmp411ConversionRate conversionRate) {
+			writeRegister(Tmp411Register::CONFIG_W, (1 << 7) | (extendedRange * (1 << 2)));
+			writeRegister(Tmp411Register::CONV_RATE_W, (uint8_t)conversionRate);
+			writeRegister(Tmp411register::RESOLUTION_W, (uint8_t)resolution);
 		}
 		void begin() {
-			Tmp411::begin(false, TMP411_RESOLUTION_12BIT, TMP411_RATE_S125);
+			Tmp411::begin(false,
+				      Tmp411Resolution::RESOLUTION_12BIT,
+				      Tmp411ConversionRate::RATE_S125);
 		}
 		// shift right by 8 bits to get the temperature in celsius.
 		uint16_t readLocalTemperature() {
-			return readRegister16(TMP411_LOCAL_TEMP);
+			return readRegister16(Tmp411Register::LOCAL_TEMP);
 		}
 		uint16_t readRemoteTemperature() {
-			return readRegister16(TMP411_REMOTE_TEMP);
+			return readRegister16(Tmp411Register::REMOTE_TEMP);
 		}
 	private:
 		uint8_t _addr;
-		void writeRegister(uint8_t reg, uint8_t val) {
+		void writeRegister(Tmp411Register reg, uint8_t val) {
 			Wire.beginTransmission(_addr);
-			Wire.write(reg);
+			Wire.write((uint8_t)reg);
 			Wire.write(val);
 			Wire.endTransmission();
 		}
-		uint8_t readRegister(uint8_t reg) {
+		uint8_t readRegister(Tmp411Register reg) {
 			Wire.beginTransmission(_addr);
-			Wire.write(reg);
+			Wire.write((uint8_t)reg);
 			Wire.endTransmission();
 			Wire.requestFrom(_addr, 1);
 			return Wire.read();
 		}
-		uint16_t readRegister16(uint8_t reg) {
+		uint16_t readRegister16(Tmp411Register reg) {
 			Wire.beginTransmission(_addr);
-			Wire.write(reg);
+			Wire.write((uint8_t)reg);
 			Wire.endTransmission();
 			Wire.requestFrom(_addr, 2);
 			return (Wire.read() << 8) + Wire.read();
