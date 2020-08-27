@@ -50,6 +50,7 @@ namespace Bonk {
   public:
     EventHandler() : _lastReading({ 0 }), // default flight event is NoneReached
 		     _curField(0),
+		     _buffer_n(0),
 		     // TODO: probably shouldn't be true? But on the other hand,
 		     // we should be able to detect if the packet is corrupted,
 		     // so it's probably fine.
@@ -138,6 +139,7 @@ namespace Bonk {
           }
 
         } else if (_curField < 1 + NUM_LONG_FIELDS) { // one of the longs
+		// TODO: use strtol instead of atol to detect errors
           ((long *)(&_partialReading))[_curField - 1] = atol(_buffer);
 
         } else if (_curField < NUM_FIELDS) { // one of the bools

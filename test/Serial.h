@@ -34,13 +34,13 @@ public:
 	}
 
 	// add data to buffer
-	void FAKE_replaceBuffer(char buf_arg[]) {
+	void FAKE_replaceBuffer(const char buf_arg[]) {
 		buf = buf_arg;
 		buf_sz = strlen(buf_arg);
 		buf_n = 0;
 	} 
 private:
-	char *buf;
+	const char *buf;
 	size_t buf_sz;
 	size_t buf_n; // current index into buf
 };
