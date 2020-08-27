@@ -10,11 +10,11 @@
 
 namespace Bonk {
 
-  typedef enum FlightEvent {
+  enum class FlightEvent {
 #define BONK_FLIGHT_EVENT(blah, flightEvent) flightEvent,
 #include "FlightEvents.h"
 #undef BONK_FLIGHT_EVENT
-  } FlightEvent;
+  };
 
   const char NUM_FIELDS = 21;
   const char NUM_LONG_FIELDS = 16;
@@ -46,11 +46,14 @@ namespace Bonk {
   } ShipReading;
 
   // should be subclassed, adding event handlers.
-  class EventManager {
+  class EventHandler {
   public:
-    EventManager() : _lastReading({ 0 }), // default flight event is NoneReached
+    EventHandler() : _lastReading({ 0 }), // default flight event is NoneReached
 		     _curField(0),
-		     _readingNormally(false) { };
+		     // TODO: probably shouldn't be true? But on the other hand,
+		     // we should be able to detect if the packet is corrupted,
+		     // so it's probably fine.
+		     _readingNormally(true) { };
 		     // other fields can be uninitialized
 
     void begin() {
@@ -68,7 +71,7 @@ namespace Bonk {
 	if (millisSinceLastData > 75) {
 	  // TODO: log that we're running behind
 	  // for now, the current reading is marked as invalid and discarded.
-	  _readingNormally = false;
+          _failReading();
 	  _finishReading();
 	  return;
 	}
@@ -91,7 +94,7 @@ namespace Bonk {
 
   protected:
     // default event handlers -- all noop
-#define BONK_FLIGHT_EVENT(blah, flightEvent) void on##flightEvent() const { };
+#define BONK_FLIGHT_EVENT(blah, flightEvent) virtual void on##flightEvent() const { };
 #include "FlightEvents.h"
 #undef BONK_FLIGHT_EVENT
 
@@ -122,9 +125,9 @@ namespace Bonk {
           // flight event types.
           if (_buffer_n == 1) {
             switch (_buffer[0]) {
-#define BONK_FLIGHT_EVENT(eventChar, flightEvent) case eventChar:       \
-              _partialReading.event = flightEvent;                      \
-              break;
+#define BONK_FLIGHT_EVENT(eventChar, flightEvent) case eventChar: \
+		    _partialReading.event = FlightEvent::flightEvent;	\
+		    break;
 #include "FlightEvents.h"
 #undef BONK_FLIGHT_EVENT
             default:
@@ -146,13 +149,14 @@ namespace Bonk {
             _failReading();
           }
           // we could skip this if reading normally check above failed
-          ((bool *)(&_partialReading.launchImminent))[_curField - NUM_LONG_FIELDS] = val;
+          ((bool *)(&_partialReading.launchImminent))[_curField - NUM_LONG_FIELDS - 1] = val;
 
         } else { // too many fields
           _failReading();
         }
       }
 
+      _curField++;
       _buffer_n = 0;
     };
 
@@ -161,7 +165,7 @@ namespace Bonk {
       _finishField();
       if (
 	_readingNormally &&
-	_curField == NUM_FIELDS + 1) {
+	_curField == NUM_FIELDS) {
 
 	_lastReading = _partialReading;
       }
@@ -173,10 +177,11 @@ namespace Bonk {
 
     // run the event corresponding to lastReading
     void _runEvents() {
+	    onCoastStart();
       switch (_lastReading.event) {
-#define BONK_FLIGHT_EVENT(eventChar, flightEvent) case eventChar: \
-        on##flightEvent(); \
-        break;
+#define BONK_FLIGHT_EVENT(eventChar, flightEvent) case FlightEvent::flightEvent: \
+	      on##flightEvent();					\
+	      break;
 #include "FlightEvents.h"
 #undef BONK_FLIGHT_EVENT
       }
@@ -185,12 +190,14 @@ namespace Bonk {
     void _processCharacter(char incoming) {
       if (_buffer_n == NUM_BUFFER_CHARS) {
         _failReading();
+      } else if (incoming == ',') {
+	      _finishField();
       } else if (incoming != '.' || _curField == 1) { // don't store dots, unless part of elapsed time
         _buffer[_buffer_n++] = incoming;
       }
     };
 
-  };  // class EventManager
+  };  // class EventHandler
 }
 
 #endif  // LOG_MANAGER_H_

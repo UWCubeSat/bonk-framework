@@ -8,7 +8,7 @@
 #include <EEPROM.h>     // for access to Arduino EEPROM
 #include <SdFat.h>      // for access to SD card attached to Arduino
 
-namespace BONK {
+namespace Bonk {
 
 // Manages the state of a Spaceduino and attached devices.
 template <typename S>
