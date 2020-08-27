@@ -5,7 +5,7 @@
 #define EVENT_MANAGER_H
 
 #ifndef BONK_USB_SERIAL
-#define BONK_USB_SERIAL Serial0
+#define BONK_USB_SERIAL Serial
 #endif
 
 namespace Bonk {
@@ -117,7 +117,7 @@ namespace Bonk {
                                           // false by _processCharacter
         _buffer[_buffer_n] = '\0';
 
-        if (curField == 0) { // special case for flight event
+        if (_curField == 0) { // special case for flight event
           // should only be one character, and it should be one of the known
           // flight event types.
           if (_buffer_n == 1) {
@@ -133,21 +133,20 @@ namespace Bonk {
           } else {
             _failReading();
           }
-          break;
 
-        } else if (curField < 1 + NUM_LONG_FIELDS) { // one of the longs
-          ((long *)(&_partialReading))[curField - 1] = atol(_buffer);
+        } else if (_curField < 1 + NUM_LONG_FIELDS) { // one of the longs
+          ((long *)(&_partialReading))[_curField - 1] = atol(_buffer);
 
-        } else if (curField < NUM_FIELDS) { // one of the bools
+        } else if (_curField < NUM_FIELDS) { // one of the bools
           bool val = false;
           // enforce it being either 0 or 1
-          if (_buffer_n[0] == '1') {
+          if (_buffer[0] == '1') {
             val = true;
-          } else if (_buffer_n[0] != '0') {
+          } else if (_buffer[0] != '0') {
             _failReading();
           }
           // we could skip this if reading normally check above failed
-          ((bool *)(&_partialReading.launchImminent))[curField - NUM_LONG_FIELDS] = val;
+          ((bool *)(&_partialReading.launchImminent))[_curField - NUM_LONG_FIELDS] = val;
 
         } else { // too many fields
           _failReading();
@@ -159,7 +158,7 @@ namespace Bonk {
 
     // check if partialReading is legit, and if so move it into lastReading
     void _finishReading() {
-      finishField();
+      _finishField();
       if (
 	_readingNormally &&
 	_curField == NUM_FIELDS + 1) {
@@ -174,7 +173,7 @@ namespace Bonk {
 
     // run the event corresponding to lastReading
     void _runEvents() {
-      switch (_lastReading.flightEvent) {
+      switch (_lastReading.event) {
 #define BONK_FLIGHT_EVENT(eventChar, flightEvent) case eventChar: \
         on##flightEvent(); \
         break;

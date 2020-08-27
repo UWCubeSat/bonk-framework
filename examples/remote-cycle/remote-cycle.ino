@@ -6,7 +6,7 @@
 #include <BonkFramework.h>
 #include <Wire.h>
 
-Pca9557 containmentPins(BONK_CONTAINMENT9557_ADDRESS);
+Bonk::Pca9557 containmentPins(BONK_CONTAINMENT9557_ADDRESS);
 
 void setup() {
 	Wire.begin();

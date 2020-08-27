@@ -56,10 +56,10 @@ namespace Bonk {
 	}
 
 	enum class Pca9557Register {
-		INPUT,
-		OUTPUT,
-		INVERT,
-		CONFIG,
+		REG_INPUT,
+		REG_OUTPUT,
+		REG_INVERT,
+		REG_CONFIG,
 	};
 
 	class Pca9557 {
@@ -73,23 +73,23 @@ namespace Bonk {
 		}
 
 		void begin() {
-			writeRegister(Pca9557Register::INVERT, 0);
+			writeRegister(Pca9557Register::REG_INVERT, 0);
 		}
 
 		void pinMode(const uint8_t pin, const boolean isOutput) {
-			uint8_t oldConfig = readRegister(Pca9557Register::CONFIG);
+			uint8_t oldConfig = readRegister(Pca9557Register::REG_CONFIG);
 			uint8_t newConfig = isOutput ?
 				oldConfig & ~(1<<pin) :
 				oldConfig | (1<<pin);
-			writeRegister(Pca9557Register::CONFIG, newConfig);
+			writeRegister(Pca9557Register::REG_CONFIG, newConfig);
 		}
 
 		void digitalWrite(const uint8_t pin, const boolean isHigh) {
-			uint8_t oldOut = readRegister(Pca9557Register::OUTPUT);
+			uint8_t oldOut = readRegister(Pca9557Register::REG_OUTPUT);
 			uint8_t newOut = isHigh ?
 				oldOut | (1 << pin) :
 				oldOut & ~(1 << pin);
-			writeRegister(Pca9557Register::OUTPUT, newOut);
+			writeRegister(Pca9557Register::REG_OUTPUT, newOut);
 		}
 
 		uint8_t digitalRead(const uint8_t pin) const {
@@ -103,7 +103,7 @@ namespace Bonk {
 			// TODO: allow alternate wire, in case somebody insane wants to use the main i2c interface for
 			// something else (eg, a camera), though they should *really* be trying to use the extra USART as
 			// an I2C in that case.
-			if (reg > Pca9557Register::INPUT && registerCache[(uint8_t)reg - 1] == data) {
+			if (reg > Pca9557Register::REG_INPUT && registerCache[(uint8_t)reg - 1] == data) {
 				// violating cse 143 guidelines: check!
 				return;
 			}
@@ -112,11 +112,11 @@ namespace Bonk {
 			Wire.write(data);
 			// TODO: errors, here and on all other endTransmissions
 			Wire.endTransmission();
-			registerCache[reg - 1] = data;
+			registerCache[(uint8_t)reg - 1] = data;
 		}
 		uint8_t readPins() const {
 			Wire.beginTransmission(_addr);
-			Wire.write((uint8_t)Pca9557Register::INPUT);
+			Wire.write((uint8_t)Pca9557Register::REG_INPUT);
 			Wire.endTransmission();
 			Wire.requestFrom(_addr, 1);
 			return Wire.read();
@@ -165,7 +165,7 @@ namespace Bonk {
 			   Tmp411ConversionRate conversionRate) {
 			writeRegister(Tmp411Register::CONFIG_W, (1 << 7) | (extendedRange * (1 << 2)));
 			writeRegister(Tmp411Register::CONV_RATE_W, (uint8_t)conversionRate);
-			writeRegister(Tmp411register::RESOLUTION_W, (uint8_t)resolution);
+			writeRegister(Tmp411Register::RESOLUTION_W, (uint8_t)resolution);
 		}
 		void begin() {
 			Tmp411::begin(false,

@@ -24,7 +24,7 @@ class LogManager {
     size_t log(LogType level, const uint8_t* buf, size_t size);
     size_t log(LogType level, const char* msg);
   private:
-    size_t print_tag(BONK::LogType level);
+    size_t print_tag(LogType level);
 
     const char* log_path_;
     SdFile log_file_;

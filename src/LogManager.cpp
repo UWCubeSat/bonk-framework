@@ -4,7 +4,7 @@
 
 #include "LogManager.h"
 
-use namespace Bonk;
+using namespace Bonk;
 
 bool LogManager::begin(const char* log_path, const char* data_path) {
     if (log_path == nullptr) {
