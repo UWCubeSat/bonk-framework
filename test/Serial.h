@@ -34,7 +34,7 @@ public:
 	}
 
 	// add data to buffer
-	void FAKE_replaceBuffer(const char buf_arg[]) {
+	void FAKE_replaceBuffer(const char *buf_arg) {
 		buf = buf_arg;
 		buf_sz = strlen(buf_arg);
 		buf_n = 0;

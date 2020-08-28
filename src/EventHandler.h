@@ -84,7 +84,6 @@ namespace Bonk {
       } else { // incomingChar == -1, ie, no data available
 	if (millisSinceLastData > 2) {
 	  _finishReading();
-	  _runEvents();
 	}
       }
     }
@@ -170,6 +169,7 @@ namespace Bonk {
 	_curField == NUM_FIELDS) {
 
 	_lastReading = _partialReading;
+	_runEvents();
       }
       // unconditionally reset the state machine
       _curField = 0;

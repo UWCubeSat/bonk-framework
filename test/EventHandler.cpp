@@ -20,6 +20,7 @@ protected:
 
 Bonk::ShipReading give_buffer(const char* blah) {
 	inCoast = false;
+	FAKE_millis = 0;
 	CoastingEventHandler ceh;
 	ceh.begin();
 	Serial.FAKE_replaceBuffer(blah);
@@ -53,8 +54,7 @@ TEST_CASE("Corrupted: Invalid event") {
 }
 
 TEST_CASE("Correct values for data") {
-	Bonk::ShipReading sh = give_buffer("F,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1");
-//	Bonk::ShipReading sh = give_buffer("A,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1");
+	Bonk::ShipReading sh = give_buffer("A,2,1,1,1.234567,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1");
 	REQUIRE(sh.event == Bonk::FlightEvent::EscapeEnabled);
 	REQUIRE(sh.vx == 1234567L);
 }
