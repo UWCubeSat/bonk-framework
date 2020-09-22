@@ -47,7 +47,7 @@ class LogManager {
     }
     size_t log(LogType level, const char* msg) {
 	    if (msg == nullptr) return 0;
-	    ssize_t bytes = print_tag(level);
+	    size_t bytes = print_tag(level);
 	    switch (level) {
 	    case LogType::DEBUG:
 		    bytes += Serial.println(msg);
@@ -78,7 +78,7 @@ class LogManager {
 		    break;
 	    }
 	    msg += millis() + ": ";
-	    return log_file_.print(msg.c_str());
+	    return log_file_.write(msg.c_str());
     }
 	
     const char* log_path_;
