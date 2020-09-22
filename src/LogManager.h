@@ -23,7 +23,7 @@ class LogManager {
 		    return false;
 	    }
 	    log_path_ = log_path;
-	    log_file_ = log_file_.open(log_path_, O_WRITE | O_APPEND);
+	    log_file_.open(log_path_, O_WRITE | O_APPEND | O_CREAT);
     }
 
     size_t log(LogType level, const String& msg) {
@@ -40,16 +40,25 @@ class LogManager {
 	    case LogType::ERROR:
 	    case LogType::NOTIFY:
 		    bytes += log_file_.write(buf, size);
-		    bytes += log_file_.println();
+		    bytes += log_file_.write('\n');
 		    break;
 	    }
 	    return bytes;
     }
     size_t log(LogType level, const char* msg) {
 	    if (msg == nullptr) return 0;
-	    size_t bytes = LogManager::print_tag(level);
-	    bytes += log_file_.write(msg);
-	    bytes += log_file_.println();
+	    ssize_t bytes = print_tag(level);
+	    switch (level) {
+	    case LogType::DEBUG:
+		    bytes += Serial.println(msg);
+		    break;
+	    case LogType::WARNING:
+	    case LogType::ERROR:
+	    case LogType::NOTIFY:
+		    bytes += log_file_.write(msg);
+		    bytes += log_file_.write('\n');
+		    break;
+	    }
 	    return bytes;
     }
   private:
